@@ -20,7 +20,7 @@ class ConnectionDialog(QDialog):
         layout.addRow("PLC Name:", self.plc_name)
 
         self.ip_address = QLineEdit(self)
-        self.ip_address.setText("127.0.0.1")
+        self.ip_address.setText("192.168.0.1")  # Đặt IP mặc định là 192.168.0.1 (PLCSIM)
         layout.addRow("IP Address:", self.ip_address)
 
         self.rack = QLineEdit(self)
@@ -122,9 +122,10 @@ class PLC_HMI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PLC HMI - Trực Quan")
-        self.setGeometry(100, 100, 1000, 600)
+        self.setGeometry(100, 100, 800, 600)
 
-        self.connection_info = {"inputs": 10, "outputs": 10}
+        # Khởi tạo connection_info với giá trị mặc định
+        self.connection_info = {"name": "S7-1214C", "ip": "192.168.0.1", "rack": 0, "slot": 1, "inputs": 10, "outputs": 10}
         self.input_tags = {}
         self.output_tags = {}
         self.init_ui()
@@ -134,6 +135,9 @@ class PLC_HMI(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_status)
         self.timer.start(500)
+
+        # Kết nối ban đầu khi khởi động
+        self.connect_plc()
 
     def connect_plc(self):
         if not self.connection_info or "ip" not in self.connection_info:
@@ -203,7 +207,7 @@ class PLC_HMI(QMainWindow):
         # Inputs với thanh cuộn
         last_input = self.get_last_address(self.connection_info["inputs"])
         input_group = QGroupBox(f"Inputs (0.0 - {last_input})")
-        input_group.setFixedWidth(200)  # Tăng chiều rộng lên 200px
+        input_group.setFixedWidth(300)  # Giữ 300px
         input_widget = QWidget()
         input_layout = QGridLayout()
         self.input_labels = []
@@ -216,7 +220,7 @@ class PLC_HMI(QMainWindow):
 
             label = QLabel(display_text, self)
             label.setFont(QFont("Arial", 8))
-            label.setFixedWidth(150)  # Tăng chiều rộng ô tag name
+            label.setFixedWidth(140)  # Giữ 140px
             label.setStyleSheet("border: 1px solid gray; padding: 2px;")
             self.input_labels.append(label)
             input_layout.addWidget(label, i, 0)
@@ -232,6 +236,7 @@ class PLC_HMI(QMainWindow):
         input_scroll = QScrollArea()
         input_scroll.setWidget(input_widget)
         input_scroll.setWidgetResizable(True)
+        input_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # Tắt cuộn ngang
         input_group.setLayout(QVBoxLayout())
         input_group.layout().addWidget(input_scroll)
         self.io_container.addWidget(input_group)
@@ -239,7 +244,7 @@ class PLC_HMI(QMainWindow):
         # Outputs với thanh cuộn
         last_output = self.get_last_address(self.connection_info["outputs"])
         output_group = QGroupBox(f"Outputs (0.0 - {last_output})")
-        output_group.setFixedWidth(250)  # Tăng chiều rộng lên 250px
+        output_group.setFixedWidth(300)  # Giữ 300px
         output_widget = QWidget()
         output_layout = QGridLayout()
         self.output_labels = []
@@ -253,7 +258,7 @@ class PLC_HMI(QMainWindow):
 
             label = QLabel(display_text, self)
             label.setFont(QFont("Arial", 8))
-            label.setFixedWidth(150)  # Tăng chiều rộng ô tag name
+            label.setFixedWidth(150)  # Giữ 150px
             label.setStyleSheet("border: 1px solid gray; padding: 2px;")
             self.output_labels.append(label)
             output_layout.addWidget(label, i, 0)
@@ -277,13 +282,14 @@ class PLC_HMI(QMainWindow):
         output_scroll = QScrollArea()
         output_scroll.setWidget(output_widget)
         output_scroll.setWidgetResizable(True)
+        output_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # Tắt cuộn ngang
         output_group.setLayout(QVBoxLayout())
         output_group.layout().addWidget(output_scroll)
         self.io_container.addWidget(output_group)
 
         # Thêm layout PLC Info
         self.plc_info_group = QGroupBox("PLC Info")
-        self.plc_info_group.setFixedWidth(200)  # Tăng chiều rộng lên 200px
+        self.plc_info_group.setFixedWidth(250)  # Giữ nguyên 250px
         self.plc_info_widget = QWidget()
         self.plc_info_layout = QVBoxLayout()
         
@@ -382,32 +388,38 @@ class PLC_HMI(QMainWindow):
                 self.log_message("Connected")
 
             num_input_bytes = (self.connection_info["inputs"] + 7) // 8
-            input_data = self.plc.read_area(snap7.types.S7AreaPE, 0, 0, num_input_bytes)
-            for i in range(self.connection_info["inputs"]):
-                byte, bit = divmod(i, 8)
-                addr = f"I{byte}.{bit}"
-                tag = self.input_tags.get(addr, "")
-                display_text = f"{addr} - {tag}" if tag else addr
-                status = get_bool(input_data, byte, bit)
-                text = "ON" if status else "OFF"
-                color = "background-color: #4CAF50;" if status else "background-color: #F44336;"
-                self.input_labels[i].setText(display_text)
-                self.input_status_labels[i].setText(text)
-                self.input_status_labels[i].setStyleSheet(f"{color} border: 1px solid gray; padding: 2px; color: white;")
+            try:
+                input_data = self.plc.read_area(snap7.types.S7AreaPE, 0, 0, num_input_bytes)
+                for i in range(self.connection_info["inputs"]):
+                    byte, bit = divmod(i, 8)
+                    addr = f"I{byte}.{bit}"
+                    tag = self.input_tags.get(addr, "")
+                    display_text = f"{addr} - {tag}" if tag else addr
+                    status = get_bool(input_data, byte, bit)
+                    text = "ON" if status else "OFF"
+                    color = "background-color: #4CAF50;" if status else "background-color: #F44336;"
+                    self.input_labels[i].setText(display_text)
+                    self.input_status_labels[i].setText(text)
+                    self.input_status_labels[i].setStyleSheet(f"{color} border: 1px solid gray; padding: 2px; color: white;")
+            except Exception as e:
+                self.log_message(f"Lỗi đọc Input: {e}")
 
             num_output_bytes = (self.connection_info["outputs"] + 7) // 8
-            output_data = self.plc.read_area(snap7.types.S7AreaPA, 0, 0, num_output_bytes)
-            for i in range(self.connection_info["outputs"]):
-                byte, bit = divmod(i, 8)
-                addr = f"Q{byte}.{bit}"
-                tag = self.output_tags.get(addr, "")
-                display_text = f"{addr} - {tag}" if tag else addr
-                status = get_bool(output_data, byte, bit)
-                text = "ON" if status else "OFF"
-                color = "background-color: #4CAF50;" if status else "background-color: #F44336;"
-                self.output_labels[i].setText(display_text)
-                self.output_status_labels[i].setText(text)
-                self.output_status_labels[i].setStyleSheet(f"{color} border: 1px solid gray; padding: 2px; color: white;")
+            try:
+                output_data = self.plc.read_area(snap7.types.S7AreaPA, 0, 0, num_output_bytes)
+                for i in range(self.connection_info["outputs"]):
+                    byte, bit = divmod(i, 8)
+                    addr = f"Q{byte}.{bit}"
+                    tag = self.output_tags.get(addr, "")
+                    display_text = f"{addr} - {tag}" if tag else addr
+                    status = get_bool(output_data, byte, bit)
+                    text = "ON" if status else "OFF"
+                    color = "background-color: #4CAF50;" if status else "background-color: #F44336;"
+                    self.output_labels[i].setText(display_text)
+                    self.output_status_labels[i].setText(text)
+                    self.output_status_labels[i].setStyleSheet(f"{color} border: 1px solid gray; padding: 2px; color: white;")
+            except Exception as e:
+                self.log_message(f"Lỗi đọc Output: {e}")
         else:
             self.status_display.setStyleSheet("background-color: #F44336; color: white;")
             if "Disconnected" not in self.status_display.toPlainText().split("\n")[-1]:
@@ -417,16 +429,19 @@ class PLC_HMI(QMainWindow):
     def toggle_output(self, byte, bit):
         if self.plc.get_connected():
             num_output_bytes = (self.connection_info["outputs"] + 7) // 8
-            data = self.plc.read_area(snap7.types.S7AreaPA, 0, 0, num_output_bytes)
-            current_state = get_bool(data, byte, bit)
-            new_data = bytearray(num_output_bytes)
-            for i in range(num_output_bytes):
-                new_data[i] = data[i]
-            set_bool(new_data, byte, bit, not current_state)
-            self.plc.write_area(snap7.types.S7AreaPA, 0, 0, new_data)
-            addr = f"Q{byte}.{bit}"
-            tag = self.output_tags.get(addr, addr)
-            self.log_message(f"Đã thay đổi {tag} thành {not current_state}")
+            try:
+                data = self.plc.read_area(snap7.types.S7AreaPA, 0, 0, num_output_bytes)
+                current_state = get_bool(data, byte, bit)
+                new_data = bytearray(num_output_bytes)
+                for i in range(num_output_bytes):
+                    new_data[i] = data[i]
+                set_bool(new_data, byte, bit, not current_state)
+                self.plc.write_area(snap7.types.S7AreaPA, 0, 0, new_data)
+                addr = f"Q{byte}.{bit}"
+                tag = self.output_tags.get(addr, addr)
+                self.log_message(f"Đã thay đổi {tag} thành {not current_state}")
+            except Exception as e:
+                self.log_message(f"Lỗi thay đổi Output: {e}")
         else:
             self.log_message("Không thể thay đổi: PLC chưa kết nối")
 
