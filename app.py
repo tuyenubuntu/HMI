@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QPushButton, QVB
                              QLineEdit, QFormLayout, QDialogButtonBox, QScrollArea, QGridLayout)
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QFont
+import time
 
 class ConnectionDialog(QDialog):
     def __init__(self, parent=None):
@@ -20,7 +21,7 @@ class ConnectionDialog(QDialog):
         layout.addRow("PLC Name:", self.plc_name)
 
         self.ip_address = QLineEdit(self)
-        self.ip_address.setText("192.168.0.1")  # Đặt IP mặc định là 192.168.0.1 (PLCSIM)
+        self.ip_address.setText("192.168.0.1")
         layout.addRow("IP Address:", self.ip_address)
 
         self.rack = QLineEdit(self)
@@ -69,7 +70,6 @@ class TagNameDialog(QDialog):
         scroll_widget = QWidget()
         scroll_layout = QVBoxLayout()
 
-        # Inputs
         input_group = QGroupBox("Inputs")
         input_layout = QFormLayout()
         self.input_tags = []
@@ -85,7 +85,6 @@ class TagNameDialog(QDialog):
         input_group.setLayout(input_layout)
         scroll_layout.addWidget(input_group)
 
-        # Outputs
         output_group = QGroupBox("Outputs")
         output_layout = QFormLayout()
         self.output_tags = []
@@ -114,17 +113,18 @@ class TagNameDialog(QDialog):
         self.setLayout(layout)
 
     def get_tags(self):
-        input_tags = {addr: tag.text() for addr, tag in self.input_tags if tag.text()}
-        output_tags = {addr: tag.text() for addr, tag in self.output_tags if tag.text()}
+        input_tags = {addr: tag.text() for addr, tag in self.input_tags if tag.text().strip()}
+        output_tags = {addr: tag.text() for addr, tag in self.output_tags if tag.text().strip()}
+        if not input_tags and not output_tags:
+            self.parent.log_message("Warning: No tags have been entered!")
         return input_tags, output_tags
 
 class PLC_HMI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("PLC HMI - Trực Quan")
+        self.setWindowTitle("PLC HMI - Visualization")
         self.setGeometry(100, 100, 800, 600)
 
-        # Khởi tạo connection_info với giá trị mặc định
         self.connection_info = {"name": "S7-1214C", "ip": "192.168.0.1", "rack": 0, "slot": 1, "inputs": 10, "outputs": 10}
         self.input_tags = {}
         self.output_tags = {}
@@ -136,46 +136,65 @@ class PLC_HMI(QMainWindow):
         self.timer.timeout.connect(self.update_status)
         self.timer.start(500)
 
-        # Kết nối ban đầu khi khởi động
         self.connect_plc()
 
-    def connect_plc(self):
+    def connect_plc(self, max_attempts=3, delay=2):
         if not self.connection_info or "ip" not in self.connection_info:
-            self.log_message("Chưa có thông tin kết nối. Nhấn 'Add Device' để thiết lập.")
+            self.log_message("No connection information available. Press 'Add Device' to configure.")
             return
 
-        try:
-            self.plc.connect(self.connection_info["ip"], 
-                            self.connection_info["rack"], 
-                            self.connection_info["slot"])
-            if self.plc.get_connected():
-                self.log_message(f"Kết nối {self.connection_info['name']} thành công!")
-                self.update_plc_info()
-            else:
-                self.log_message("Kết nối thất bại!")
-                self.update_plc_info()
-        except Exception as e:
-            self.log_message(f"Lỗi kết nối: {e}")
-            self.update_plc_info()
+        if self.plc.get_connected():
+            self.plc.disconnect()
+            self.log_message("Disconnecting current connection to retry...")
+
+        for attempt in range(max_attempts):
+            try:
+                self.plc.connect(self.connection_info["ip"], self.connection_info["rack"], self.connection_info["slot"])
+                if self.plc.get_connected():
+                    self.log_message(f"Connection to {self.connection_info['name']} successful!")
+                    self.update_plc_info()
+                    return
+                else:
+                    self.log_message(f"Connection attempt {attempt + 1} failed...")
+            except Exception as e:
+                self.log_message(f"Connection error (attempt {attempt + 1}): {e}")
+            time.sleep(delay)
+        self.log_message("Connection failed after multiple attempts!")
+        self.update_plc_info()
 
     def init_ui(self):
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.main_layout = QVBoxLayout()
 
+        # Header with Clear button
         header_layout = QHBoxLayout()
-        self.title = QLabel("HMI Giám Sát PLC", self)
+        self.title = QLabel("PLC HMI Monitoring", self)
         self.title.setFont(QFont("Arial", 14, QFont.Bold))
         header_layout.addWidget(self.title)
         header_layout.addStretch()
+
         add_device_btn = QPushButton("Add Device", self)
         add_device_btn.setFont(QFont("Arial", 10))
         add_device_btn.clicked.connect(self.show_connection_dialog)
         header_layout.addWidget(add_device_btn)
+
         tag_name_btn = QPushButton("Tag Name", self)
         tag_name_btn.setFont(QFont("Arial", 10))
         tag_name_btn.clicked.connect(self.show_tag_name_dialog)
         header_layout.addWidget(tag_name_btn)
+
+        refresh_btn = QPushButton("Refresh", self)
+        refresh_btn.setFont(QFont("Arial", 10))
+        refresh_btn.clicked.connect(self.refresh_connection)
+        header_layout.addWidget(refresh_btn)
+
+        # Add Clear button
+        clear_btn = QPushButton("Clear", self)
+        clear_btn.setFont(QFont("Arial", 10))
+        clear_btn.clicked.connect(self.clear_log)
+        header_layout.addWidget(clear_btn)
+
         self.main_layout.addLayout(header_layout)
 
         self.status_display = QTextEdit(self)
@@ -189,6 +208,15 @@ class PLC_HMI(QMainWindow):
         self.main_layout.addLayout(self.io_container)
 
         self.central_widget.setLayout(self.main_layout)
+
+    def refresh_connection(self):
+        self.log_message("Refreshing connection...")
+        self.connect_plc()
+
+    def clear_log(self):
+        """Method handling the Clear button press"""
+        self.status_display.clear()
+        self.log_message("Log has been cleared!")
 
     def get_last_address(self, count):
         if count <= 1:
@@ -204,10 +232,9 @@ class PLC_HMI(QMainWindow):
             if item.widget():
                 item.widget().setParent(None)
 
-        # Inputs với thanh cuộn
         last_input = self.get_last_address(self.connection_info["inputs"])
         input_group = QGroupBox(f"Inputs (0.0 - {last_input})")
-        input_group.setFixedWidth(300)  # Giữ 300px
+        input_group.setFixedWidth(300)
         input_widget = QWidget()
         input_layout = QGridLayout()
         self.input_labels = []
@@ -220,7 +247,7 @@ class PLC_HMI(QMainWindow):
 
             label = QLabel(display_text, self)
             label.setFont(QFont("Arial", 8))
-            label.setFixedWidth(140)  # Giữ 140px
+            label.setFixedWidth(140)
             label.setStyleSheet("border: 1px solid gray; padding: 2px;")
             self.input_labels.append(label)
             input_layout.addWidget(label, i, 0)
@@ -236,15 +263,14 @@ class PLC_HMI(QMainWindow):
         input_scroll = QScrollArea()
         input_scroll.setWidget(input_widget)
         input_scroll.setWidgetResizable(True)
-        input_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # Tắt cuộn ngang
+        input_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         input_group.setLayout(QVBoxLayout())
         input_group.layout().addWidget(input_scroll)
         self.io_container.addWidget(input_group)
 
-        # Outputs với thanh cuộn
         last_output = self.get_last_address(self.connection_info["outputs"])
         output_group = QGroupBox(f"Outputs (0.0 - {last_output})")
-        output_group.setFixedWidth(300)  # Giữ 300px
+        output_group.setFixedWidth(300)
         output_widget = QWidget()
         output_layout = QGridLayout()
         self.output_labels = []
@@ -258,7 +284,7 @@ class PLC_HMI(QMainWindow):
 
             label = QLabel(display_text, self)
             label.setFont(QFont("Arial", 8))
-            label.setFixedWidth(150)  # Giữ 150px
+            label.setFixedWidth(150)
             label.setStyleSheet("border: 1px solid gray; padding: 2px;")
             self.output_labels.append(label)
             output_layout.addWidget(label, i, 0)
@@ -282,14 +308,13 @@ class PLC_HMI(QMainWindow):
         output_scroll = QScrollArea()
         output_scroll.setWidget(output_widget)
         output_scroll.setWidgetResizable(True)
-        output_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # Tắt cuộn ngang
+        output_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         output_group.setLayout(QVBoxLayout())
         output_group.layout().addWidget(output_scroll)
         self.io_container.addWidget(output_group)
 
-        # Thêm layout PLC Info
         self.plc_info_group = QGroupBox("PLC Info")
-        self.plc_info_group.setFixedWidth(250)  # Giữ nguyên 250px
+        self.plc_info_group.setFixedWidth(250)
         self.plc_info_widget = QWidget()
         self.plc_info_layout = QVBoxLayout()
         
@@ -337,14 +362,14 @@ class PLC_HMI(QMainWindow):
 
     def update_plc_info(self):
         if "name" in self.connection_info:
-            self.title.setText(f"HMI Giám Sát {self.connection_info['name']}")
+            self.title.setText(f"HMI Monitoring {self.connection_info['name']}")
             self.plc_name_label.setText(f"PLC Name: {self.connection_info['name']}")
             self.plc_ip_label.setText(f"IP: {self.connection_info['ip']}")
             self.plc_rack_slot_label.setText(f"Rack/Slot: {self.connection_info['rack']}/{self.connection_info['slot']}")
             self.plc_inputs_label.setText(f"Number of Inputs: {self.connection_info['inputs']}")
             self.plc_outputs_label.setText(f"Number of Outputs: {self.connection_info['outputs']}")
         else:
-            self.title.setText("HMI Giám Sát PLC")
+            self.title.setText("PLC HMI Monitoring")
             self.plc_name_label.setText("PLC Name: N/A")
             self.plc_ip_label.setText("IP: N/A")
             self.plc_rack_slot_label.setText("Rack/Slot: N/A")
@@ -390,36 +415,42 @@ class PLC_HMI(QMainWindow):
             num_input_bytes = (self.connection_info["inputs"] + 7) // 8
             try:
                 input_data = self.plc.read_area(snap7.types.S7AreaPE, 0, 0, num_input_bytes)
-                for i in range(self.connection_info["inputs"]):
-                    byte, bit = divmod(i, 8)
-                    addr = f"I{byte}.{bit}"
-                    tag = self.input_tags.get(addr, "")
-                    display_text = f"{addr} - {tag}" if tag else addr
-                    status = get_bool(input_data, byte, bit)
-                    text = "ON" if status else "OFF"
-                    color = "background-color: #4CAF50;" if status else "background-color: #F44336;"
-                    self.input_labels[i].setText(display_text)
-                    self.input_status_labels[i].setText(text)
-                    self.input_status_labels[i].setStyleSheet(f"{color} border: 1px solid gray; padding: 2px; color: white;")
+                if input_data and len(input_data) >= num_input_bytes:
+                    for i in range(self.connection_info["inputs"]):
+                        byte, bit = divmod(i, 8)
+                        addr = f"I{byte}.{bit}"
+                        tag = self.input_tags.get(addr, "")
+                        display_text = f"{addr} - {tag}" if tag else addr
+                        status = get_bool(input_data, byte, bit)
+                        text = "ON" if status else "OFF"
+                        color = "background-color: #4CAF50;" if status else "background-color: #F44336;"
+                        self.input_labels[i].setText(display_text)
+                        self.input_status_labels[i].setText(text)
+                        self.input_status_labels[i].setStyleSheet(f"{color} border: 1px solid gray; padding: 2px; color: white;")
+                else:
+                    self.log_message("Input data is empty or invalid!")
             except Exception as e:
-                self.log_message(f"Lỗi đọc Input: {e}")
+                self.log_message(f"Error reading Input: {e}")
 
             num_output_bytes = (self.connection_info["outputs"] + 7) // 8
             try:
                 output_data = self.plc.read_area(snap7.types.S7AreaPA, 0, 0, num_output_bytes)
-                for i in range(self.connection_info["outputs"]):
-                    byte, bit = divmod(i, 8)
-                    addr = f"Q{byte}.{bit}"
-                    tag = self.output_tags.get(addr, "")
-                    display_text = f"{addr} - {tag}" if tag else addr
-                    status = get_bool(output_data, byte, bit)
-                    text = "ON" if status else "OFF"
-                    color = "background-color: #4CAF50;" if status else "background-color: #F44336;"
-                    self.output_labels[i].setText(display_text)
-                    self.output_status_labels[i].setText(text)
-                    self.output_status_labels[i].setStyleSheet(f"{color} border: 1px solid gray; padding: 2px; color: white;")
+                if output_data and len(output_data) >= num_output_bytes:
+                    for i in range(self.connection_info["outputs"]):
+                        byte, bit = divmod(i, 8)
+                        addr = f"Q{byte}.{bit}"
+                        tag = self.output_tags.get(addr, "")
+                        display_text = f"{addr} - {tag}" if tag else addr
+                        status = get_bool(output_data, byte, bit)
+                        text = "ON" if status else "OFF"
+                        color = "background-color: #4CAF50;" if status else "background-color: #F44336;"
+                        self.output_labels[i].setText(display_text)
+                        self.output_status_labels[i].setText(text)
+                        self.output_status_labels[i].setStyleSheet(f"{color} border: 1px solid gray; padding: 2px; color: white;")
+                else:
+                    self.log_message("Output data is empty or invalid!")
             except Exception as e:
-                self.log_message(f"Lỗi đọc Output: {e}")
+                self.log_message(f"Error reading Output: {e}")
         else:
             self.status_display.setStyleSheet("background-color: #F44336; color: white;")
             if "Disconnected" not in self.status_display.toPlainText().split("\n")[-1]:
@@ -431,24 +462,27 @@ class PLC_HMI(QMainWindow):
             num_output_bytes = (self.connection_info["outputs"] + 7) // 8
             try:
                 data = self.plc.read_area(snap7.types.S7AreaPA, 0, 0, num_output_bytes)
-                current_state = get_bool(data, byte, bit)
-                new_data = bytearray(num_output_bytes)
-                for i in range(num_output_bytes):
-                    new_data[i] = data[i]
-                set_bool(new_data, byte, bit, not current_state)
-                self.plc.write_area(snap7.types.S7AreaPA, 0, 0, new_data)
-                addr = f"Q{byte}.{bit}"
-                tag = self.output_tags.get(addr, addr)
-                self.log_message(f"Đã thay đổi {tag} thành {not current_state}")
+                if data and len(data) >= num_output_bytes:
+                    current_state = get_bool(data, byte, bit)
+                    new_data = bytearray(num_output_bytes)
+                    for i in range(num_output_bytes):
+                        new_data[i] = data[i]
+                    set_bool(new_data, byte, bit, not current_state)
+                    self.plc.write_area(snap7.types.S7AreaPA, 0, 0, new_data)
+                    addr = f"Q{byte}.{bit}"
+                    tag = self.output_tags.get(addr, addr)
+                    self.log_message(f"Changed {tag} to {not current_state}")
+                else:
+                    self.log_message("Output data is invalid!")
             except Exception as e:
-                self.log_message(f"Lỗi thay đổi Output: {e}")
+                self.log_message(f"Error changing Output: {e}")
         else:
-            self.log_message("Không thể thay đổi: PLC chưa kết nối")
+            self.log_message("Cannot change: PLC is not connected")
 
     def closeEvent(self, event):
         if self.plc.get_connected():
             self.plc.disconnect()
-            self.log_message("Đã ngắt kết nối PLC")
+            self.log_message("PLC connection disconnected")
         event.accept()
 
 if __name__ == "__main__":
