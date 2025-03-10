@@ -1,3 +1,4 @@
+import os
 import sys
 import snap7
 from snap7.util import *
@@ -7,6 +8,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QPushButton, QVB
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QFont
 import time
+from datetime import datetime
 
 class ConnectionDialog(QDialog):
     def __init__(self, parent=None):
@@ -136,9 +138,19 @@ class PLC_HMI(QMainWindow):
         self.timer.timeout.connect(self.update_status)
         self.timer.start(500)
 
-        self.connect_plc()
+        self.create_log_file()
+
+    def create_log_file(self):
+        folder_log = 'log\\'
+        current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        if not os.path.exists(folder_log):
+            os.makedirs(folder_log)
+        self.log_filename = folder_log +  f"log_{current_time}.txt"
+        with open(self.log_filename, 'a') as f:
+            f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Application started.\n")
 
     def connect_plc(self, max_attempts=3, delay=2):
+        self.log_message("Button 'Connect' clicked. Attempting to connect...")
         if not self.connection_info or "ip" not in self.connection_info:
             self.log_message("No connection information available. Press 'Add Device' to configure.")
             return
@@ -149,6 +161,7 @@ class PLC_HMI(QMainWindow):
 
         for attempt in range(max_attempts):
             try:
+                self.log_message(f"Attempting to connect to {self.connection_info['ip']} (Attempt {attempt + 1}/{max_attempts})...")
                 self.plc.connect(self.connection_info["ip"], self.connection_info["rack"], self.connection_info["slot"])
                 if self.plc.get_connected():
                     self.log_message(f"Connection to {self.connection_info['name']} successful!")
@@ -157,7 +170,7 @@ class PLC_HMI(QMainWindow):
                 else:
                     self.log_message(f"Connection attempt {attempt + 1} failed...")
             except Exception as e:
-                self.log_message(f"Connection error (attempt {attempt + 1}): {e}")
+                self.log_message(f"Connection error (attempt {attempt + 1}): {str(e)}")
             time.sleep(delay)
         self.log_message("Connection failed after multiple attempts!")
         self.update_plc_info()
@@ -167,7 +180,6 @@ class PLC_HMI(QMainWindow):
         self.setCentralWidget(self.central_widget)
         self.main_layout = QVBoxLayout()
 
-        # Header with Clear button
         header_layout = QHBoxLayout()
         self.title = QLabel("PLC HMI Monitoring", self)
         self.title.setFont(QFont("Arial", 14, QFont.Bold))
@@ -189,7 +201,11 @@ class PLC_HMI(QMainWindow):
         refresh_btn.clicked.connect(self.refresh_connection)
         header_layout.addWidget(refresh_btn)
 
-        # Add Clear button
+        connect_btn = QPushButton("Connect", self)
+        connect_btn.setFont(QFont("Arial", 10))
+        connect_btn.clicked.connect(self.connect_plc)
+        header_layout.addWidget(connect_btn)
+
         clear_btn = QPushButton("Clear", self)
         clear_btn.setFont(QFont("Arial", 10))
         clear_btn.clicked.connect(self.clear_log)
@@ -210,13 +226,12 @@ class PLC_HMI(QMainWindow):
         self.central_widget.setLayout(self.main_layout)
 
     def refresh_connection(self):
-        self.log_message("Refreshing connection...")
+        self.log_message("Button 'Refresh' clicked. Refreshing connection...")
         self.connect_plc()
 
     def clear_log(self):
-        """Method handling the Clear button press"""
         self.status_display.clear()
-        self.log_message("Log has been cleared!")
+        self.log_message("Button 'Clear' clicked. Log has been cleared!")
 
     def get_last_address(self, count):
         if count <= 1:
@@ -384,27 +399,37 @@ class PLC_HMI(QMainWindow):
             self.plc_status_label.setStyleSheet("border: 1px solid gray; padding: 2px; background-color: #F44336; color: white;")
 
     def show_connection_dialog(self):
+        self.log_message("Button 'Add Device' clicked. Opening connection dialog...")
         dialog = ConnectionDialog(self)
         if dialog.exec_() == QDialog.Accepted:
             self.connection_info = dialog.get_connection_info()
             self.input_tags.clear()
             self.output_tags.clear()
+            self.log_message("Connection dialog accepted. Updated device info.")
             self.update_io_layout()
-            self.connect_plc()
+        else:
+            self.log_message("Connection dialog cancelled.")
 
     def show_tag_name_dialog(self):
+        self.log_message("Button 'Tag Name' clicked. Opening tag name dialog...")
         dialog = TagNameDialog(self)
         if dialog.exec_() == QDialog.Accepted:
             self.input_tags, self.output_tags = dialog.get_tags()
+            self.log_message("Tag name dialog accepted. Updated tags.")
             self.update_io_layout()
+        else:
+            self.log_message("Tag name dialog cancelled.")
 
     def log_message(self, message):
         if hasattr(self, 'status_display'):
-            current_text = self.status_display.toPlainText()
-            self.status_display.setText(f"{current_text}\n{message}")
-            self.status_display.verticalScrollBar().setValue(
-                self.status_display.verticalScrollBar().maximum()
-            )
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            full_message = f"[{current_time}] {message}"
+            self.status_display.setText(f"{self.status_display.toPlainText()}\n{full_message}")
+            self.status_display.verticalScrollBar().setValue(self.status_display.verticalScrollBar().maximum())
+
+            # Ghi vào file log
+            with open(self.log_filename, 'a') as f:
+                f.write(f"{full_message}\n")
 
     def update_status(self):
         if self.plc.get_connected() and "ip" in self.connection_info:
@@ -458,6 +483,8 @@ class PLC_HMI(QMainWindow):
         self.update_plc_info()
 
     def toggle_output(self, byte, bit):
+        addr = f"Q{byte}.{bit}"
+        self.log_message(f"Button 'T' clicked for {addr}. Attempting to toggle output...")
         if self.plc.get_connected():
             num_output_bytes = (self.connection_info["outputs"] + 7) // 8
             try:
@@ -469,7 +496,6 @@ class PLC_HMI(QMainWindow):
                         new_data[i] = data[i]
                     set_bool(new_data, byte, bit, not current_state)
                     self.plc.write_area(snap7.types.S7AreaPA, 0, 0, new_data)
-                    addr = f"Q{byte}.{bit}"
                     tag = self.output_tags.get(addr, addr)
                     self.log_message(f"Changed {tag} to {not current_state}")
                 else:
@@ -483,6 +509,8 @@ class PLC_HMI(QMainWindow):
         if self.plc.get_connected():
             self.plc.disconnect()
             self.log_message("PLC connection disconnected")
+        with open(self.log_filename, 'a') as f:
+            f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Application closed.\n")
         event.accept()
 
 if __name__ == "__main__":
