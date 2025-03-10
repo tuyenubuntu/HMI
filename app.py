@@ -127,7 +127,7 @@ class PLC_HMI(QMainWindow):
         self.setGeometry(100, 100, 800, 600)
 
         # Thiết lập biểu tượng cho cửa sổ
-        self.setWindowIcon(QIcon("icon.ico"))  # Đặt đường dẫn đến icon.ico hoặc icon.png
+        self.setWindowIcon(QIcon("shortcut/hmi.ico.ico"))  # Đặt đường dẫn đến icon.ico hoặc icon.png
 
         self.connection_info = {"name": "S7-1214C", "ip": "192.168.0.1", "rack": 0, "slot": 1, "inputs": 10, "outputs": 10}
         self.input_tags = {}
@@ -183,7 +183,7 @@ class PLC_HMI(QMainWindow):
 
         # Thêm logo vào giao diện
         logo_label = QLabel(self)
-        pixmap = QPixmap("logo.png")  # Đặt đường dẫn đến logo.png
+        pixmap = QPixmap("shortcut/logo.png")  # Đặt đường dẫn đến logo.png
         if not pixmap.isNull():
             # Điều chỉnh kích thước logo (ví dụ: 100x50 pixel)
             pixmap = pixmap.scaled(100, 50, Qt.KeepAspectRatio)
