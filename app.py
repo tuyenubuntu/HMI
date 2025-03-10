@@ -1,4 +1,3 @@
-import os
 import sys
 import snap7
 from snap7.util import *
@@ -6,7 +5,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QPushButton, QVB
                              QHBoxLayout, QWidget, QGroupBox, QTextEdit, QDialog, 
                              QLineEdit, QFormLayout, QDialogButtonBox, QScrollArea, QGridLayout)
 from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QIcon, QPixmap
 import time
 from datetime import datetime
 
@@ -127,6 +126,9 @@ class PLC_HMI(QMainWindow):
         self.setWindowTitle("PLC HMI - Visualization")
         self.setGeometry(100, 100, 800, 600)
 
+        # Thiết lập biểu tượng cho cửa sổ
+        self.setWindowIcon(QIcon("icon.ico"))  # Đặt đường dẫn đến icon.ico hoặc icon.png
+
         self.connection_info = {"name": "S7-1214C", "ip": "192.168.0.1", "rack": 0, "slot": 1, "inputs": 10, "outputs": 10}
         self.input_tags = {}
         self.output_tags = {}
@@ -141,11 +143,8 @@ class PLC_HMI(QMainWindow):
         self.create_log_file()
 
     def create_log_file(self):
-        folder_log = 'log\\'
         current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        if not os.path.exists(folder_log):
-            os.makedirs(folder_log)
-        self.log_filename = folder_log +  f"log_{current_time}.txt"
+        self.log_filename = f"log_{current_time}.txt"
         with open(self.log_filename, 'a') as f:
             f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Application started.\n")
 
@@ -181,6 +180,18 @@ class PLC_HMI(QMainWindow):
         self.main_layout = QVBoxLayout()
 
         header_layout = QHBoxLayout()
+
+        # Thêm logo vào giao diện
+        logo_label = QLabel(self)
+        pixmap = QPixmap("logo.png")  # Đặt đường dẫn đến logo.png
+        if not pixmap.isNull():
+            # Điều chỉnh kích thước logo (ví dụ: 100x50 pixel)
+            pixmap = pixmap.scaled(100, 50, Qt.KeepAspectRatio)
+            logo_label.setPixmap(pixmap)
+        else:
+            logo_label.setText("Logo not found!")
+        header_layout.addWidget(logo_label)
+
         self.title = QLabel("PLC HMI Monitoring", self)
         self.title.setFont(QFont("Arial", 14, QFont.Bold))
         header_layout.addWidget(self.title)
