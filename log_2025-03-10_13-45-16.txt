@@ -1,6 +1,0 @@
-[2025-03-10 13:45:16] Application started.
-[2025-03-10 13:45:17] Disconnected
-[2025-03-10 13:45:52] Button 'T' clicked for Q0.0. Attempting to toggle output...
-[2025-03-10 13:45:52] Cannot change: PLC is not connected
-[2025-03-10 13:45:52] Disconnected
-[2025-03-10 13:46:17] Button 'Add Device' clicked. Opening connection dialog...

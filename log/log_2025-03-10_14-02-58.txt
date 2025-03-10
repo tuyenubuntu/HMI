@@ -1,7 +1,0 @@
-[2025-03-10 14:02:58] Application started.
-[2025-03-10 14:02:59] Disconnected
-[2025-03-10 14:03:12] Button 'Clear' clicked. Log has been cleared!
-[2025-03-10 14:03:13] Disconnected
-[2025-03-10 14:03:21] Button 'Clear' clicked. Log has been cleared!
-[2025-03-10 14:03:21] Disconnected
-[2025-03-10 14:03:23] Application closed.
