@@ -1,3 +1,4 @@
+import os
 import sys
 import snap7
 from snap7.util import *
@@ -127,7 +128,7 @@ class PLC_HMI(QMainWindow):
         self.setGeometry(100, 100, 800, 600)
 
         # Thiết lập biểu tượng cho cửa sổ
-        self.setWindowIcon(QIcon("shortcut/hmi.ico"))  # Đặt đường dẫn đến icon.ico hoặc icon.png
+        self.setWindowIcon(QIcon("shortcut/images/icon3.ico"))  # Đặt đường dẫn đến icon.ico hoặc icon.png
 
         self.connection_info = {"name": "S7-1214C", "ip": "192.168.0.1", "rack": 0, "slot": 1, "inputs": 10, "outputs": 10}
         self.input_tags = {}
@@ -144,7 +145,10 @@ class PLC_HMI(QMainWindow):
 
     def create_log_file(self):
         current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        self.log_filename = f"log_{current_time}.txt"
+        log_folder = "log\\"
+        if not os.path.exists(log_folder):
+            os.makedirs(log_folder)
+        self.log_filename = log_folder + f"log_{current_time}.txt"
         with open(self.log_filename, 'a') as f:
             f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Application started.\n")
 
@@ -183,7 +187,7 @@ class PLC_HMI(QMainWindow):
 
         # Thêm logo vào giao diện
         logo_label = QLabel(self)
-        pixmap = QPixmap("shortcut/logo.png")  # Đặt đường dẫn đến logo.png
+        pixmap = QPixmap("shortcut/images/logo.png")  # Đặt đường dẫn đến logo.png
         if not pixmap.isNull():
             # Điều chỉnh kích thước logo (ví dụ: 100x50 pixel)
             pixmap = pixmap.scaled(100, 50, Qt.KeepAspectRatio)
